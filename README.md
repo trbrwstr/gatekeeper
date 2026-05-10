@@ -1,6 +1,6 @@
 # Gatekeeper
 
-A local-first API security proxy written in Rust. Gatekeeper sits between clients and your upstream service, enforcing policy rules, rate limiting, threat intelligence feeds, and custom WASM-based logic — all before a request ever reaches your backend.
+A local-first API security proxy written in Rust. Gatekeeper sits between clients and your upstream service, enforcing policy rules, rate limiting, threat intelligence feeds, and custom WASM-based logic. All before a request ever reaches your backend.
 
 ## Features
 
