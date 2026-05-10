@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Gatekeeper Admin</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; background: #0f172a; color: #e2e8f0; min-height: 100vh; }
+        .container { max-width: 1200px; margin: 0 auto; padding: 2rem; }
+        h1 { font-size: 1.5rem; margin-bottom: 1.5rem; color: #38bdf8; }
+        h2 { font-size: 1.1rem; margin-bottom: 1rem; color: #94a3b8; }
+        .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+        .card { background: #1e293b; border-radius: 0.75rem; padding: 1.5rem; border: 1px solid #334155; }
+        .card-title { font-size: 0.75rem; text-transform: uppercase; letter-spacing: 0.05em; color: #64748b; margin-bottom: 0.5rem; }
+        .card-value { font-size: 2rem; font-weight: 700; color: #f8fafc; }
+        .rules-table { width: 100%; border-collapse: collapse; }
+        .rules-table th, .rules-table td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #334155; }
+        .rules-table th { color: #64748b; font-size: 0.75rem; text-transform: uppercase; }
+        .badge { padding: 0.25rem 0.5rem; border-radius: 0.25rem; font-size: 0.75rem; font-weight: 600; }
+        .badge-block { background: #7f1d1d; color: #fca5a5; }
+        .badge-allow { background: #14532d; color: #86efac; }
+        .badge-throttle { background: #78350f; color: #fcd34d; }
+        .btn { background: #2563eb; color: white; border: none; padding: 0.5rem 1rem; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem; }
+        .btn:hover { background: #1d4ed8; }
+        .status { margin-top: 0.5rem; font-size: 0.875rem; color: #22c55e; }
+        .error { color: #ef4444; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div id="login-section" style="display:none;">
+            <h1>&#x1f6e1; Gatekeeper Login</h1>
+            <div class="card" style="max-width: 400px;">
+                <div style="margin-bottom: 1rem;">
+                    <input id="login-user" type="text" placeholder="Username" style="width:100%;padding:0.5rem;margin-bottom:0.5rem;border-radius:0.375rem;border:1px solid #334155;background:#0f172a;color:#e2e8f0;">
+                    <input id="login-pass" type="password" placeholder="Password" style="width:100%;padding:0.5rem;border-radius:0.375rem;border:1px solid #334155;background:#0f172a;color:#e2e8f0;">
+                </div>
+                <button class="btn" onclick="doLogin()">Login</button>
+                <div id="login-status" class="status error" style="margin-top:0.5rem;"></div>
+            </div>
+        </div>
+
+        <div id="main-section" style="display:none;">
+        <h1>&#x1f6e1; Gatekeeper Admin <button class="btn" style="font-size:0.75rem;padding:0.25rem 0.5rem;margin-left:1rem;" onclick="doLogout()">Logout</button></h1>
+
+        <div class="grid" id="stats-grid">
+            <div class="card">
+                <div class="card-title">Total Requests</div>
+                <div class="card-value" id="stat-total">-</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Blocked</div>
+                <div class="card-value" id="stat-blocked">-</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Throttled</div>
+                <div class="card-value" id="stat-throttled">-</div>
+            </div>
+            <div class="card">
+                <div class="card-title">Rate Limited</div>
+                <div class="card-value" id="stat-ratelimit">-</div>
+            </div>
+        </div>
+
+        <div class="card" style="margin-bottom: 2rem;">
+            <h2>Active Rules</h2>
+            <table class="rules-table">
+                <thead>
+                    <tr><th>Name</th><th>Action</th><th>Priority</th><th>Matchers</th></tr>
+                </thead>
+                <tbody id="rules-body"></tbody>
+            </table>
+        </div>
+
+        <div class="card">
+            <h2>Config Management</h2>
+            <button class="btn" onclick="reloadConfig()">Reload Config</button>
+            <div id="reload-status" class="status"></div>
+        </div>
+        </div>
+    </div>
+
+    <script>
+        function getToken() {
+            return localStorage.getItem('gatekeeper_token');
+        }
+
+        function authHeaders() {
+            const token = getToken();
+            return token ? { 'Authorization': 'Bearer ' + token } : {};
+        }
+
+        async function authFetch(url, options = {}) {
+            options.headers = { ...options.headers, ...authHeaders() };
+            const res = await fetch(url, options);
+            if (res.status === 401 || res.status === 403) {
+                localStorage.removeItem('gatekeeper_token');
+                showLogin();
+                throw new Error('Unauthorized');
+            }
+            return res;
+        }
+
+        function showLogin() {
+            document.getElementById('login-section').style.display = 'block';
+            document.getElementById('main-section').style.display = 'none';
+        }
+
+        function showMain() {
+            document.getElementById('login-section').style.display = 'none';
+            document.getElementById('main-section').style.display = 'block';
+            fetchStats();
+            fetchRules();
+        }
+
+        async function doLogin() {
+            const username = document.getElementById('login-user').value;
+            const password = document.getElementById('login-pass').value;
+            const status = document.getElementById('login-status');
+            try {
+                const res = await fetch('/admin/api/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ username, password }),
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    localStorage.setItem('gatekeeper_token', data.token);
+                    status.textContent = '';
+                    showMain();
+                } else {
+                    status.textContent = 'Invalid credentials';
+                }
+            } catch (e) {
+                status.textContent = 'Login error: ' + e.message;
+            }
+        }
+
+        function doLogout() {
+            localStorage.removeItem('gatekeeper_token');
+            showLogin();
+        }
+
+        async function fetchStats() {
+            try {
+                const res = await authFetch('/admin/api/stats');
+                const data = await res.json();
+                const text = data.metrics_text;
+                document.getElementById('stat-total').textContent = extractMetric(text, 'gatekeeper_requests_total') || '0';
+                document.getElementById('stat-blocked').textContent = extractMetric(text, 'gatekeeper_requests_blocked') || '0';
+                document.getElementById('stat-throttled').textContent = extractMetric(text, 'gatekeeper_requests_throttled') || '0';
+                document.getElementById('stat-ratelimit').textContent = extractMetric(text, 'gatekeeper_rate_limit_hits') || '0';
+            } catch (e) {
+                console.error('Failed to fetch stats', e);
+            }
+        }
+
+        function extractMetric(text, name) {
+            const lines = text.split('\n');
+            let total = 0;
+            for (const line of lines) {
+                if (line.startsWith(name) && !line.startsWith('#')) {
+                    const parts = line.split(' ');
+                    total += parseFloat(parts[parts.length - 1]) || 0;
+                }
+            }
+            return total.toString();
+        }
+
+        async function fetchRules() {
+            try {
+                const res = await authFetch('/admin/api/rules');
+                const rules = await res.json();
+                const tbody = document.getElementById('rules-body');
+                tbody.innerHTML = rules.map(r => `
+                    <tr>
+                        <td>${r.name}</td>
+                        <td><span class="badge badge-${r.action}">${r.action}</span></td>
+                        <td>${r.priority}</td>
+                        <td>${formatMatchers(r)}</td>
+                    </tr>
+                `).join('');
+            } catch (e) {
+                console.error('Failed to fetch rules', e);
+            }
+        }
+
+        function formatMatchers(rule) {
+            const parts = [];
+            if (rule.path_contains) parts.push('path: ' + rule.path_contains);
+            if (rule.method) parts.push('method: ' + rule.method);
+            if (rule.user_agent_contains) parts.push('ua: ' + rule.user_agent_contains.join(', '));
+            return parts.join('; ') || 'none';
+        }
+
+        async function reloadConfig() {
+            const status = document.getElementById('reload-status');
+            try {
+                const res = await authFetch('/admin/api/reload', { method: 'POST' });
+                if (res.ok) {
+                    status.className = 'status';
+                    status.textContent = 'Config reloaded successfully';
+                    fetchRules();
+                } else {
+                    status.className = 'status error';
+                    status.textContent = 'Reload failed';
+                }
+            } catch (e) {
+                status.className = 'status error';
+                status.textContent = 'Error: ' + e.message;
+            }
+        }
+
+        if (getToken()) {
+            showMain();
+        } else {
+            showLogin();
+        }
+        setInterval(() => { if (getToken()) fetchStats(); }, 5000);
+    </script>
+</body>
+</html>

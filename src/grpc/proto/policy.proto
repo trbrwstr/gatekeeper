@@ -1,0 +1,52 @@
+syntax = "proto3";
+
+package gatekeeper;
+
+service PolicySync {
+    rpc SyncRules(SyncRequest) returns (SyncResponse);
+    rpc ReportMetrics(MetricsReport) returns (Ack);
+    rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+}
+
+message SyncRequest {
+    string node_id = 1;
+    uint64 last_version = 2;
+}
+
+message SyncResponse {
+    uint64 version = 1;
+    repeated RuleProto rules = 2;
+    bool changed = 3;
+}
+
+message RuleProto {
+    string name = 1;
+    string path_contains = 2;
+    string method = 3;
+    repeated string user_agent_contains = 4;
+    string action = 5;
+    uint32 priority = 6;
+}
+
+message MetricsReport {
+    string node_id = 1;
+    uint64 requests_total = 2;
+    uint64 requests_blocked = 3;
+    uint64 requests_throttled = 4;
+    uint64 rate_limit_hits = 5;
+    double avg_latency_ms = 6;
+}
+
+message Ack {
+    bool success = 1;
+}
+
+message HeartbeatRequest {
+    string node_id = 1;
+    uint64 uptime_secs = 2;
+}
+
+message HeartbeatResponse {
+    bool acknowledged = 1;
+    string message = 2;
+}

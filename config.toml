@@ -1,0 +1,26 @@
+[[rules]]
+name = "block_scrapers"
+path_contains = "/api"
+user_agent_contains = ["curl", "wget"]
+action = "block"
+priority = 100
+
+[[rules]]
+name = "slow_login"
+path_contains = "/login"
+action = "throttle"
+priority = 50
+
+# User accounts (optional). When present, login authenticates against these
+# instead of the GATEKEEPER_ADMIN_USER / GATEKEEPER_ADMIN_PASS env vars.
+# Generate a password_hash with:  cargo run -- hash-password -p "yourpassword"
+#
+# [[users]]
+# username = "admin"
+# password_hash = "$argon2id$v=19$m=19456,t=2,p=1$..."
+# role = "admin"
+#
+# [[users]]
+# username = "operator1"
+# password_hash = "$argon2id$v=19$m=19456,t=2,p=1$..."
+# role = "operator"
