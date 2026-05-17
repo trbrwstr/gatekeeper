@@ -1,4 +1,5 @@
 use axum::routing::{any, get};
+use axum::{http::StatusCode, response::IntoResponse};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -87,6 +88,27 @@ pub async fn run(port: u16, upstream: String, central: Option<String>, config_pa
     }
 }
 
-async fn prometheus_handler() -> String {
-    metrics::metrics_endpoint()
+fn metrics_http_response(result: Result<String, metrics::MetricsError>) -> impl IntoResponse {
+    match result {
+        Ok(body) => (StatusCode::OK, body).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "metrics scrape failed").into_response(),
+    }
+}
+
+async fn prometheus_handler() -> impl IntoResponse {
+    metrics_http_response(metrics::metrics_endpoint())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metrics_response_is_500_when_encoder_fails() {
+        let response = metrics_http_response(Err(metrics::MetricsError::Encode(
+            prometheus::Error::Msg("forced".to_string()),
+        )));
+        let response = response.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
+    }
 }

@@ -40,9 +40,10 @@ struct StatsResponse {
 }
 
 async fn stats_handler() -> impl IntoResponse {
-    Json(StatsResponse {
-        metrics_text: metrics::metrics_endpoint(),
-    })
+    match metrics::metrics_endpoint() {
+        Ok(metrics_text) => Json(StatsResponse { metrics_text }).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "metrics scrape failed").into_response(),
+    }
 }
 
 async fn rules_handler(
