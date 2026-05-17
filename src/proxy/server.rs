@@ -1,4 +1,4 @@
-use axum::routing::{any, get};
+use axum::{http::StatusCode, response::IntoResponse, routing::{any, get}};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
@@ -87,6 +87,9 @@ pub async fn run(port: u16, upstream: String, central: Option<String>, config_pa
     }
 }
 
-async fn prometheus_handler() -> String {
-    metrics::metrics_endpoint()
+async fn prometheus_handler() -> impl IntoResponse {
+    match metrics::metrics_endpoint() {
+        Ok(body) => (StatusCode::OK, body).into_response(),
+        Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("# {}\n", err)).into_response(),
+    }
 }

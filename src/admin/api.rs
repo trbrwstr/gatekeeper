@@ -40,9 +40,10 @@ struct StatsResponse {
 }
 
 async fn stats_handler() -> impl IntoResponse {
-    Json(StatsResponse {
-        metrics_text: metrics::metrics_endpoint(),
-    })
+    let metrics_text = metrics::metrics_endpoint()
+        .unwrap_or_else(|e| format!("# {}\n", e));
+
+    Json(StatsResponse { metrics_text })
 }
 
 async fn rules_handler(
