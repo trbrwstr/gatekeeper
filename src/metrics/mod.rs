@@ -135,6 +135,8 @@ pub fn snapshot() -> MetricsSnapshot {
     snap
 }
 
+pub fn metrics_endpoint() -> Result<String, String> {
+    use prometheus::Encoder;
 #[derive(Debug)]
 pub enum MetricsError {
     Encode(prometheus::Error),
@@ -166,6 +168,11 @@ impl MetricsEncoder for prometheus::TextEncoder {
 fn metrics_endpoint_with_encoder<E: MetricsEncoder>(encoder: &E) -> Result<String, MetricsError> {
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
+    if encoder.encode(&metric_families, &mut buffer).is_err() {
+        return Err("metrics encoding error".to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
     encoder
         .encode_to_buffer(&metric_families, &mut buffer)
         .map_err(MetricsError::Encode)?;
