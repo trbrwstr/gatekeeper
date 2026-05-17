@@ -19,11 +19,23 @@ pub fn inspect(
     decision_filter: Option<String>,
     ip_filter: Option<String>,
 ) {
-    let file = File::open(file).expect("failed to open log file");
+    let file = match File::open(file) {
+        Ok(file) => file,
+        Err(err) => {
+            eprintln!("failed to open log file: {}", err);
+            return;
+        }
+    };
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
-        let line = line.unwrap();
+        let line = match line {
+            Ok(line) => line,
+            Err(err) => {
+                eprintln!("failed to read log line: {}", err);
+                continue;
+            }
+        };
 
         match serde_json::from_str::<AuditEvent>(&line) {
             Ok(event) => {

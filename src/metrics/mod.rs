@@ -134,12 +134,15 @@ pub fn snapshot() -> MetricsSnapshot {
     snap
 }
 
-pub fn metrics_endpoint() -> String {
+pub fn metrics_endpoint() -> Result<String, String> {
     use prometheus::Encoder;
 
     let encoder = prometheus::TextEncoder::new();
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
-    String::from_utf8(buffer).unwrap()
+    if encoder.encode(&metric_families, &mut buffer).is_err() {
+        return Err("metrics encoding error".to_string());
+    }
+
+    Ok(String::from_utf8_lossy(&buffer).into_owned())
 }
