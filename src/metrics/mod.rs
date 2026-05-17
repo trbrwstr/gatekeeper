@@ -140,6 +140,9 @@ pub fn metrics_endpoint() -> String {
     let encoder = prometheus::TextEncoder::new();
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
-    encoder.encode(&metric_families, &mut buffer).unwrap();
-    String::from_utf8(buffer).unwrap()
+    if encoder.encode(&metric_families, &mut buffer).is_err() {
+        return "# metrics encoding error\n".to_string();
+    }
+
+    String::from_utf8_lossy(&buffer).into_owned()
 }
