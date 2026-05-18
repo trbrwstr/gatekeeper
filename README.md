@@ -4,7 +4,7 @@ A local-first API security proxy written in Rust. Gatekeeper sits between client
 
 ## Features
 
-- **Reverse proxy** — Forwards allowed requests to a configurable upstream via Hyper
+- **Reverse proxy** — Forwards allowed requests to a configurable `http://` or `https://` upstream via Hyper, stripping hop-by-hop headers and adding `X-Forwarded-For/Host/Proto`
 - **Policy engine** — TOML-defined rules that match on path, method, and user agent with prioritized block/throttle/allow actions
 - **Rate limiting** — Per-IP token-bucket rate limiter with automatic eviction of stale buckets
 - **WASM rules** — Extend the policy engine with custom WebAssembly modules (Wasmtime)
@@ -199,6 +199,9 @@ All admin endpoints are under `/admin/api/` and require a valid JWT (obtained vi
 - **WASM rules.** Modules run with a fuel limit and bounded I/O, but only load
   modules you trust.
 - **Fail-closed.** Unknown rule actions are treated as `block`.
+- **Upstream forwarding.** Hop-by-hop headers (and any listed in `Connection`)
+  are stripped, `Host` is rewritten to the upstream authority, and
+  `X-Forwarded-For/Host/Proto` are set. HTTPS upstreams use system root certs.
 
 ## License
 

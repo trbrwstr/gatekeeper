@@ -111,17 +111,18 @@ pub async fn handler(
     metrics::record_request(decision_str, source_str, duration_ms);
     audit::log(&state.log_tx, &ctx, &decision, latency).await;
 
-    enforce(decision, req, &upstream).await
+    enforce(decision, req, &upstream, &ctx.ip).await
 }
 
 async fn enforce(
     decision: Decision,
     req: Request<Body>,
     upstream: &str,
+    client_ip: &str,
 ) -> Response<Body> {
     match decision {
         Decision::Allow { .. } => {
-            match forward::forward(req, upstream).await {
+            match forward::forward(req, upstream, client_ip).await {
                 Ok(res) => res,
                 Err(_) => Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
@@ -138,7 +139,7 @@ async fn enforce(
         Decision::Throttle { .. } => {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-            match forward::forward(req, upstream).await {
+            match forward::forward(req, upstream, client_ip).await {
                 Ok(res) => res,
                 Err(_) => Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
