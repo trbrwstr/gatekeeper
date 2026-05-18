@@ -59,10 +59,9 @@ impl RateLimiter {
         }
         self.last_eviction = now;
 
-        let stale_threshold = if self.refill_rate > 0 {
-            (self.capacity / self.refill_rate).max(1) as u64 * 2
-        } else {
-            120
+        let stale_threshold = match self.capacity.checked_div(self.refill_rate) {
+            Some(quotient) => (quotient.max(1) as u64) * 2,
+            None => 120,
         };
 
         self.buckets.retain(|_, bucket| {
