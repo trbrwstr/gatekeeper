@@ -10,7 +10,7 @@ use axum::{
 
 use self::roles::{Permission, Role};
 
-fn extract_claims(req: &Request<Body>) -> Result<jwt::Claims, Response<Body>> {
+fn extract_claims(req: &Request<Body>) -> Result<jwt::Claims, Box<Response<Body>>> {
     let auth_header = req
         .headers()
         .get("authorization")
@@ -18,19 +18,23 @@ fn extract_claims(req: &Request<Body>) -> Result<jwt::Claims, Response<Body>> {
         .unwrap_or("");
 
     if !auth_header.starts_with("Bearer ") {
-        return Err(Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .body(Body::from("Missing or invalid Authorization header"))
-            .unwrap());
+        return Err(Box::new(
+            Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(Body::from("Missing or invalid Authorization header"))
+                .unwrap(),
+        ));
     }
 
     let token = &auth_header[7..];
 
     jwt::verify_token(token).map_err(|_| {
-        Response::builder()
-            .status(StatusCode::UNAUTHORIZED)
-            .body(Body::from("Invalid token"))
-            .unwrap()
+        Box::new(
+            Response::builder()
+                .status(StatusCode::UNAUTHORIZED)
+                .body(Body::from("Invalid token"))
+                .unwrap(),
+        )
     })
 }
 
@@ -47,7 +51,7 @@ pub async fn require_auth(
 ) -> Response<Body> {
     match extract_claims(&req) {
         Ok(_) => next.run(req).await,
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }
 
@@ -64,7 +68,7 @@ pub async fn require_admin(
                 forbidden()
             }
         }
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }
 
@@ -81,6 +85,6 @@ pub async fn require_user_admin(
                 forbidden()
             }
         }
-        Err(resp) => resp,
+        Err(resp) => *resp,
     }
 }

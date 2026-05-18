@@ -41,9 +41,11 @@ cp .env.example .env
 
 | Variable | Purpose |
 |---|---|
-| `GATEKEEPER_JWT_SECRET` | **Required.** Secret used to sign/verify JWT tokens |
+| `GATEKEEPER_JWT_SECRET` | **Required.** Secret used to sign/verify JWT tokens. Must be ≥32 chars of high-entropy randomness; the app refuses to start with a short or placeholder value. |
 | `GATEKEEPER_ADMIN_USER` | Fallback admin username (used when no `[[users]]` in config) |
 | `GATEKEEPER_ADMIN_PASS` | Fallback admin password |
+| `GATEKEEPER_CLUSTER_TOKEN` | Required in central/node mode. Shared secret (≥16 chars) nodes present to the central gRPC server. |
+| `GATEKEEPER_GRPC_ADDR` | Optional. Central-mode gRPC bind address. Defaults to `127.0.0.1:<port+1>`. |
 
 2. Edit `config.toml` to define your policy rules:
 
@@ -185,6 +187,24 @@ All admin endpoints are under `/admin/api/` and require a valid JWT (obtained vi
 | `/admin/api/users/:username` | DELETE | Admin | Remove a user |
 | `/metrics` | GET | Auth | Prometheus metrics endpoint |
 
+## Security Notes
+
+- **Source IP trust.** `trust_proxy_headers` defaults to `false`, so the TCP
+  peer address is used for rate limiting and IP blocklists. Only enable it
+  when Gatekeeper sits behind a proxy that strips/rewrites
+  `X-Forwarded-For` / `X-Real-IP`.
+- **Multi-node.** The central/node gRPC channel is authenticated with
+  `GATEKEEPER_CLUSTER_TOKEN`. Run it over a trusted network or a TLS-terminating
+  tunnel; the central server binds loopback unless `GATEKEEPER_GRPC_ADDR` is set.
+- **WASM rules.** Modules run with a fuel limit and bounded I/O, but only load
+  modules you trust.
+- **Fail-closed.** Unknown rule actions are treated as `block`.
+
 ## License
 
-TBD
+Copyright (c) 2026. All rights reserved.
+
+This software is proprietary and provided under a commercial license. No part
+of it may be copied, modified, distributed, or used except as expressly
+permitted by a written agreement with the copyright holder. Replace this notice
+with your end-user license agreement before distribution.

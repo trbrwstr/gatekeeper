@@ -4,7 +4,7 @@ use tokio::sync::{mpsc, Mutex, RwLock};
 use crate::auth::users::UserStore;
 use crate::config::reload::SharedEngine;
 use crate::security::rate_limit::RateLimiter;
-use crate::threat::ThreatStore;
+use crate::threat::{FeedHandles, ThreatStore};
 use crate::wasm::WasmEngine;
 
 pub type SharedWasmEngine = Arc<RwLock<Option<WasmEngine>>>;
@@ -16,5 +16,8 @@ pub struct AppState {
     pub config_path: String,
     pub wasm_engine: SharedWasmEngine,
     pub threat_store: ThreatStore,
+    pub threat_feed_handles: FeedHandles,
     pub user_store: UserStore,
+    pub trust_proxy_headers: bool,
+    pub max_body_bytes: usize,
 }

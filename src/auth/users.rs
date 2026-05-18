@@ -8,7 +8,7 @@ use argon2::{
 };
 use serde::Serialize;
 
-use crate::config::config::UserConfig;
+use crate::config::UserConfig;
 
 pub type UserStore = Arc<RwLock<HashMap<String, UserEntry>>>;
 
@@ -112,4 +112,30 @@ pub fn hash_password(password: &str) -> Result<String, String> {
         .hash_password(password.as_bytes(), &salt)
         .map_err(|e| format!("failed to hash password: {}", e))?;
     Ok(hash.to_string())
+}
+
+/// Length-independent-content comparison used for the env-var admin
+/// credential fallback so login does not leak the secret via response timing.
+pub fn constant_time_eq(a: &[u8], b: &[u8]) -> bool {
+    if a.len() != b.len() {
+        return false;
+    }
+    let mut diff = 0u8;
+    for (x, y) in a.iter().zip(b.iter()) {
+        diff |= x ^ y;
+    }
+    diff == 0
+}
+
+#[cfg(test)]
+mod tests {
+    use super::constant_time_eq;
+
+    #[test]
+    fn constant_time_eq_matches_only_identical_bytes() {
+        assert!(constant_time_eq(b"correct horse", b"correct horse"));
+        assert!(!constant_time_eq(b"correct horse", b"correct horsa"));
+        assert!(!constant_time_eq(b"short", b"longer value"));
+        assert!(constant_time_eq(b"", b""));
+    }
 }

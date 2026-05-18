@@ -23,7 +23,13 @@ pub fn inspect(
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
-        let line = line.unwrap();
+        let line = match line {
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("error reading log file: {}", e);
+                break;
+            }
+        };
 
         match serde_json::from_str::<AuditEvent>(&line) {
             Ok(event) => {

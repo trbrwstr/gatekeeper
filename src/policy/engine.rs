@@ -48,8 +48,10 @@ fn map_action(action: &str, rule_name: &str) -> Decision {
             source: DecisionSource::Rule,
         },
 
-        _ => Decision::Allow {
-            reason: "unknown".into(),
+        // Fail closed: an unrecognized action (e.g. a malformed rule pushed
+        // from a central node) must never silently allow traffic.
+        _ => Decision::Block {
+            reason: format!("rule '{}' has unknown action '{}'", rule_name, action),
             source: DecisionSource::Rule,
         },
     }
@@ -101,6 +103,20 @@ mod tests {
             priority: 10,
         }]);
         assert!(engine.evaluate(&ctx("/login")).is_none());
+    }
+
+    #[test]
+    fn unknown_action_fails_closed() {
+        let engine = PolicyEngine::new(vec![Rule {
+            name: "bad_rule".into(),
+            path_contains: Some("/api".into()),
+            method: None,
+            user_agent_contains: None,
+            action: "allilow".into(),
+            priority: 10,
+        }]);
+        let d = engine.evaluate(&ctx("/api/x"));
+        assert!(matches!(d, Some(Decision::Block { .. })));
     }
 
     #[test]

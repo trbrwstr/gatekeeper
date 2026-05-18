@@ -3,7 +3,7 @@ pub mod host;
 
 use crate::context::request::RequestContext;
 use crate::policy::decision::Decision;
-use crate::config::config::WasmRuleConfig;
+use crate::config::WasmRuleConfig;
 
 pub struct WasmEngine {
     modules: Vec<WasmModule>,
