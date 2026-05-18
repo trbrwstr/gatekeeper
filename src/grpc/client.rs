@@ -1,6 +1,10 @@
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use once_cell::sync::Lazy;
 use tokio::time;
+use tonic::service::interceptor::InterceptedService;
+use tonic::transport::Channel;
 
 use super::proto::policy_sync_client::PolicySyncClient;
 use super::proto::{HeartbeatRequest, MetricsReport, SyncRequest};
@@ -8,7 +12,24 @@ use crate::config::reload::SharedEngine;
 use crate::policy::engine::PolicyEngine;
 use crate::policy::rules::Rule;
 
-type GrpcClient = PolicySyncClient<tonic::transport::Channel>;
+static CLUSTER_TOKEN: Lazy<String> = Lazy::new(|| {
+    std::env::var("GATEKEEPER_CLUSTER_TOKEN")
+        .expect("GATEKEEPER_CLUSTER_TOKEN must be set in node mode to authenticate to central")
+});
+
+// The `Result<_, Status>` shape is dictated by tonic's `Interceptor` trait,
+// so the large-error lint cannot be satisfied by boxing here.
+#[allow(clippy::result_large_err)]
+fn attach_token(mut req: tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status> {
+    let value = CLUSTER_TOKEN
+        .parse()
+        .map_err(|_| tonic::Status::internal("cluster token is not a valid header value"))?;
+    req.metadata_mut().insert("x-cluster-token", value);
+    Ok(req)
+}
+
+type AuthInterceptor = fn(tonic::Request<()>) -> Result<tonic::Request<()>, tonic::Status>;
+type GrpcClient = PolicySyncClient<InterceptedService<Channel, AuthInterceptor>>;
 
 pub struct NodeClient {
     node_id: String,
@@ -28,7 +49,13 @@ impl NodeClient {
     }
 
     async fn connect(&self) -> Result<GrpcClient, Box<dyn std::error::Error>> {
-        Ok(PolicySyncClient::connect(self.central_addr.clone()).await?)
+        let channel = Channel::from_shared(self.central_addr.clone())?
+            .connect()
+            .await?;
+        Ok(PolicySyncClient::with_interceptor(
+            channel,
+            attach_token as AuthInterceptor,
+        ))
     }
 
     pub async fn start_sync_loop(&self) {

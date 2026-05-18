@@ -18,11 +18,7 @@ mod policy {
     pub mod rules;
 }
 
-mod config {
-    pub mod config;
-    pub mod validate;
-    pub mod reload;
-}
+mod config;
 
 mod log {
     pub mod audit;
@@ -40,7 +36,7 @@ mod threat;
 use clap::Parser;
 use cli::{Cli, Commands};
 
-use crate::config::config::load_config;
+use crate::config::load_config;
 use crate::policy::engine::PolicyEngine;
 use crate::policy::replay;
 
@@ -56,10 +52,12 @@ async fn main() {
             match mode.as_str() {
                 "central" => {
                     let cfg = load_config(&config).expect("failed to load config");
-                    if let Err(e) = grpc::server::run_grpc_server(
-                        &format!("0.0.0.0:{}", port + 1),
-                        cfg.rules,
-                    ).await {
+                    // Bind loopback by default so the rule-sync control plane
+                    // is not exposed on all interfaces. Set GATEKEEPER_GRPC_ADDR
+                    // (e.g. 0.0.0.0:8081) to expose it to remote nodes.
+                    let bind = std::env::var("GATEKEEPER_GRPC_ADDR")
+                        .unwrap_or_else(|_| format!("127.0.0.1:{}", port + 1));
+                    if let Err(e) = grpc::server::run_grpc_server(&bind, cfg.rules).await {
                         eprintln!("gRPC server error: {}", e);
                     }
                 }

@@ -2,11 +2,17 @@ pub mod feeds;
 
 use std::collections::HashSet;
 use std::sync::Arc;
-use tokio::sync::RwLock;
+use tokio::sync::{Mutex, RwLock};
+use tokio::task::JoinHandle;
 
-use crate::config::config::ThreatFeedConfig;
+use crate::config::ThreatFeedConfig;
 
 pub type ThreatStore = Arc<RwLock<ThreatData>>;
+
+/// Handles to the currently running per-feed refresh tasks. Tracked so that a
+/// config reload can cancel the old tasks instead of leaking a growing set of
+/// background loops that keep overwriting the threat store.
+pub type FeedHandles = Arc<Mutex<Vec<JoinHandle<()>>>>;
 
 #[derive(Default)]
 pub struct ThreatData {
@@ -28,11 +34,23 @@ pub fn new_threat_store() -> ThreatStore {
     Arc::new(RwLock::new(ThreatData::default()))
 }
 
-pub async fn start_feeds(configs: Vec<ThreatFeedConfig>, store: ThreatStore) {
+pub fn new_feed_handles() -> FeedHandles {
+    Arc::new(Mutex::new(Vec::new()))
+}
+
+pub async fn start_feeds(
+    configs: Vec<ThreatFeedConfig>,
+    store: ThreatStore,
+    handles: &FeedHandles,
+) {
+    let mut guard = handles.lock().await;
+    for handle in guard.drain(..) {
+        handle.abort();
+    }
     for config in configs {
         let store = store.clone();
-        tokio::spawn(async move {
+        guard.push(tokio::spawn(async move {
             feeds::run_feed(config, store).await;
-        });
+        }));
     }
 }

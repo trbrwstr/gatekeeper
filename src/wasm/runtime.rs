@@ -19,6 +19,21 @@ struct WasmOutput {
     reason: String,
 }
 
+/// Upper bound on the fuel a single rule evaluation may consume. Prevents a
+/// malicious or buggy module from hanging the request handler with an infinite
+/// loop; exceeding it traps the call and the module simply yields no decision.
+const FUEL_LIMIT: u64 = 100_000_000;
+
+/// Upper bound on the JSON output a module may return, so it cannot drive a
+/// huge host-side allocation.
+const MAX_OUTPUT_BYTES: usize = 64 * 1024;
+
+fn read_range(data: &[u8], ptr: i32, len: usize) -> Option<&[u8]> {
+    let start = usize::try_from(ptr).ok()?;
+    let end = start.checked_add(len)?;
+    data.get(start..end)
+}
+
 pub struct WasmRuntime {
     engine: Engine,
     module: Module,
@@ -26,7 +41,9 @@ pub struct WasmRuntime {
 
 impl WasmRuntime {
     pub fn new(path: &str) -> Result<Self, anyhow::Error> {
-        let engine = Engine::default();
+        let mut config = Config::new();
+        config.consume_fuel(true);
+        let engine = Engine::new(&config)?;
         let module = Module::from_file(&engine, path)?;
 
         Ok(Self { engine, module })
@@ -34,6 +51,7 @@ impl WasmRuntime {
 
     pub fn evaluate(&self, ctx: &RequestContext) -> Option<Decision> {
         let mut store = Store::new(&self.engine, ());
+        store.set_fuel(FUEL_LIMIT).ok()?;
         let mut linker = Linker::new(&self.engine);
 
         if let Err(e) = host::add_host_functions(&mut linker) {
@@ -61,20 +79,28 @@ impl WasmRuntime {
         };
 
         let input_json = serde_json::to_vec(&input).ok()?;
-        let input_len = input_json.len() as i32;
+        let input_len = i32::try_from(input_json.len()).ok()?;
 
         let input_ptr = alloc_fn.call(&mut store, input_len).ok()?;
 
-        memory.data_mut(&mut store)[input_ptr as usize..(input_ptr as usize + input_len as usize)]
-            .copy_from_slice(&input_json);
+        {
+            let mem = memory.data_mut(&mut store);
+            let start = usize::try_from(input_ptr).ok()?;
+            let end = start.checked_add(input_json.len())?;
+            mem.get_mut(start..end)?.copy_from_slice(&input_json);
+        }
 
         let output_ptr = evaluate_fn.call(&mut store, (input_ptr, input_len)).ok()?;
 
         let data = memory.data(&store);
-        let output_len_bytes = &data[output_ptr as usize..output_ptr as usize + 4];
-        let output_len = i32::from_le_bytes(output_len_bytes.try_into().ok()?) as usize;
-        let output_start = output_ptr as usize + 4;
-        let output_bytes = &data[output_start..output_start + output_len];
+        let output_len_bytes = read_range(data, output_ptr, 4)?;
+        let output_len = i32::from_le_bytes(output_len_bytes.try_into().ok()?);
+        let output_len = usize::try_from(output_len).ok()?;
+        if output_len > MAX_OUTPUT_BYTES {
+            tracing::error!("WASM module returned oversized output ({} bytes)", output_len);
+            return None;
+        }
+        let output_bytes = read_range(data, output_ptr.checked_add(4)?, output_len)?;
 
         let output: WasmOutput = serde_json::from_slice(output_bytes).ok()?;
 

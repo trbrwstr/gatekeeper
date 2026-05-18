@@ -25,14 +25,14 @@ impl Role {
     }
 
     pub fn has_permission(&self, perm: Permission) -> bool {
-        match (self, perm) {
-            (_, Permission::ViewStats) => true,
-            (_, Permission::ViewRules) => true,
-            (Role::Admin, _) => true,
-            (Role::Operator, Permission::ManageRules) => true,
-            (Role::Operator, Permission::ReloadConfig) => true,
-            _ => false,
-        }
+        matches!(
+            (self, perm),
+            (_, Permission::ViewStats)
+                | (_, Permission::ViewRules)
+                | (Role::Admin, _)
+                | (Role::Operator, Permission::ManageRules)
+                | (Role::Operator, Permission::ReloadConfig)
+        )
     }
 }
 
