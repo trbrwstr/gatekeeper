@@ -1,213 +1,204 @@
-# Gatekeeper
+# Gatekeeper — API Security Proxy & Freelance Build Portfolio
 
-A local-first API security proxy written in Rust. Gatekeeper sits between clients and your upstream service, enforcing policy rules, rate limiting, threat intelligence feeds, and custom WASM-based logic. All before a request ever reaches your backend.
+Gatekeeper is a production-minded API security proxy built in Rust. It shows the kind of work I deliver for freelance clients: secure backend infrastructure, clean developer tooling, practical dashboards, and maintainable systems that can grow from MVP to production.
 
-## Features
+If you found this project through Fiverr, Upwork, or my portfolio, this repository is here to demonstrate how I approach software projects: clear scope, simple architecture, security-first decisions, and working code that is easy to operate.
 
-- **Reverse proxy** — Forwards allowed requests to a configurable `http://` or `https://` upstream via Hyper, stripping hop-by-hop headers and adding `X-Forwarded-For/Host/Proto`
-- **Policy engine** — TOML-defined rules that match on path, method, and user agent with prioritized block/throttle/allow actions
-- **Rate limiting** — Per-IP token-bucket rate limiter with automatic eviction of stale buckets
-- **WASM rules** — Extend the policy engine with custom WebAssembly modules (Wasmtime)
-- **Threat intelligence** — Ingest external threat feeds to block known-bad IPs and user agents
-- **Hot reload** — File-watcher on `config.toml`; rules, users, WASM modules, and threat feeds reload without downtime
-- **JWT authentication** — Issue and verify tokens with role-based access control (Admin / Operator / Viewer)
-- **User management** — Define users in config with Argon2-hashed passwords, or fall back to env-var credentials
-- **Admin API & UI** — Embedded web dashboard for viewing stats, rules, and managing users (protected by RBAC)
-- **Prometheus metrics** — OpenTelemetry-backed counters and histograms exposed at `/metrics`
-- **Structured audit log** — Every request decision is logged as JSON to a configurable log file
-- **Multi-node mode** — gRPC-based central/node architecture for syncing rules, heartbeats, and metrics across a fleet
-- **CLI tooling** — Config validation, audit log inspection, request replay, and password hashing
+## What I Can Build for You
 
-## Quick Start
+I help founders, small businesses, and technical teams turn ideas into reliable software. Common project types include:
 
-### Prerequisites
+- **Secure web applications** — dashboards, admin panels, portals, internal tools, and customer-facing apps.
+- **Backend APIs** — REST APIs, reverse proxies, authentication, authorization, rate limiting, logging, and integrations.
+- **Cybersecurity tooling** — API protection, request filtering, audit logs, threat-feed ingestion, access control, and security automation.
+- **CLI and automation tools** — scripts, developer tools, data processors, deployment helpers, and business workflow automation.
+- **MVPs and prototypes** — fast, focused builds that validate your idea without unnecessary complexity.
+- **Code review and hardening** — security review, cleanup, refactoring, documentation, and production-readiness improvements.
 
-- Rust 1.70+ (edition 2021)
-- Protobuf compiler (`protoc`) for gRPC codegen
+## Why This Project Matters
 
-### Build
+Gatekeeper is more than a demo app. It represents the kind of engineering clients usually need when software has to be dependable, observable, and secure.
 
-```bash
-cargo build --release
+The project includes:
+
+- A Rust reverse proxy for forwarding safe traffic to an upstream service.
+- A policy engine for blocking, throttling, or allowing requests.
+- Per-IP rate limiting to reduce abuse and accidental overload.
+- JWT authentication and role-based access control.
+- User management with Argon2 password hashing.
+- Hot-reloadable TOML configuration.
+- WebAssembly rule support for custom request logic.
+- Threat intelligence feed ingestion for known-bad IPs and user agents.
+- Structured JSON audit logs for request decisions.
+- Prometheus metrics for monitoring.
+- Multi-node mode for larger deployments.
+- CLI tools for validation, log inspection, request replay, and password hashing.
+
+In client terms, this means I can build systems that are not just functional, but also easier to operate, debug, secure, and extend.
+
+## Services I Offer
+
+### MVP and Product Builds
+
+Need to launch quickly? I can help define the smallest useful version of your product, build it, and leave you with a clean foundation for the next phase.
+
+Deliverables can include:
+
+- Product scope and feature breakdown.
+- Frontend and backend implementation.
+- Authentication and user roles.
+- Database design.
+- Admin dashboard.
+- Deployment guidance.
+- Documentation and handoff notes.
+
+### Backend and API Development
+
+I build backend systems that are simple, secure, and maintainable.
+
+Examples:
+
+- REST APIs and service integrations.
+- Payment, email, CRM, webhook, and third-party API integrations.
+- Authentication with sessions, JWTs, or OAuth-style flows.
+- Rate limiting, validation, and abuse prevention.
+- Logging, metrics, and operational dashboards.
+- Background jobs and automation workflows.
+
+### Security-Focused Engineering
+
+Security should be part of the build, not a last-minute add-on. I can help reduce risk while keeping the product practical.
+
+Examples:
+
+- Secure authentication and authorization.
+- Input validation and safer error handling.
+- API gateway or proxy rules.
+- Audit logging.
+- Secrets and environment configuration review.
+- Basic threat modeling for new features.
+- Hardening existing apps before launch.
+
+### Refactoring, Debugging, and Rescue Work
+
+If your project is slow, fragile, undocumented, or difficult to ship, I can help stabilize it.
+
+Examples:
+
+- Fix failing builds or broken deployments.
+- Simplify overcomplicated code.
+- Improve project structure.
+- Add missing tests or documentation.
+- Remove security footguns.
+- Prepare an MVP for handoff or launch.
+
+## How I Work With Clients
+
+My process is designed to reduce confusion and keep momentum high.
+
+1. **Clarify the outcome** — What should the software do, who is it for, and what does success look like?
+2. **Define the MVP** — Identify the smallest useful version so you are not paying for unnecessary features.
+3. **Build in phases** — Ship working increments instead of disappearing until the end.
+4. **Communicate tradeoffs** — Explain options clearly: speed, cost, maintainability, and security.
+5. **Document the handoff** — Leave you with setup notes, usage instructions, and next-step recommendations.
+
+## Technology Strengths
+
+I choose tools based on the job instead of chasing hype. My strongest areas include:
+
+- **Rust** for secure, high-performance systems, CLIs, proxies, and backend services.
+- **JavaScript / TypeScript** for web apps, APIs, Node.js services, and frontend work.
+- **Python** for automation, scripting, data processing, and rapid prototypes.
+- **Web fundamentals** including HTTP, APIs, authentication, forms, dashboards, and deployment workflows.
+- **Security fundamentals** including validation, least privilege, secrets handling, logging, and attack-surface reduction.
+
+## Example: What Gatekeeper Does
+
+Gatekeeper sits between clients and your backend service:
+
+```text
+Client request
+   |
+   v
+Gatekeeper
+   |-- checks threat feeds
+   |-- evaluates custom WASM rules
+   |-- applies path, method, and user-agent policies
+   |-- rate-limits suspicious or high-volume traffic
+   |-- records audit logs and metrics
+   |
+   v
+Allowed request reaches your upstream application
 ```
 
-### Configure
+This pattern is useful for projects that need API protection, internal access control, traffic filtering, or security observability.
 
-1. Copy the example env file and fill in real values:
+## Project Capabilities Demonstrated
 
-```bash
-cp .env.example .env
-```
-
-| Variable | Purpose |
+| Capability | Client Value |
 |---|---|
-| `GATEKEEPER_JWT_SECRET` | **Required.** Secret used to sign/verify JWT tokens. Must be ≥32 chars of high-entropy randomness; the app refuses to start with a short or placeholder value. |
-| `GATEKEEPER_ADMIN_USER` | Fallback admin username (used when no `[[users]]` in config) |
-| `GATEKEEPER_ADMIN_PASS` | Fallback admin password |
-| `GATEKEEPER_CLUSTER_TOKEN` | Required in central/node mode. Shared secret (≥16 chars) nodes present to the central gRPC server. |
-| `GATEKEEPER_GRPC_ADDR` | Optional. Central-mode gRPC bind address. Defaults to `127.0.0.1:<port+1>`. |
+| Reverse proxy | Protect or route traffic before it reaches your app |
+| Policy engine | Turn business/security rules into configurable behavior |
+| Rate limiting | Reduce abuse, scraping, and accidental overload |
+| JWT auth + RBAC | Protect dashboards and administrative actions |
+| Audit logs | Understand who did what and why a request was blocked |
+| Metrics | Monitor traffic, errors, and system behavior |
+| Hot reload | Update configuration without downtime |
+| CLI tooling | Make operations repeatable and easier to support |
+| Multi-node mode | Prepare for larger or distributed deployments |
 
-2. Edit `config.toml` to define your policy rules:
+## Engagement Ideas
 
-```toml
-[[rules]]
-name = "block_scrapers"
-path_contains = "/api"
-user_agent_contains = ["curl", "wget"]
-action = "block"
-priority = 100
+If you are not sure what to request on Fiverr or Upwork, these are good starting packages:
 
-[[rules]]
-name = "slow_login"
-path_contains = "/login"
-action = "throttle"
-priority = 50
-```
+### Starter MVP Build
 
-Optionally add `[[users]]`, `[[wasm_rules]]`, and `[[threat_feeds]]` sections — see below.
+A focused first version of your web app, API, automation tool, or dashboard.
 
-### Run
+### API Security Review
 
-```bash
-# Standalone mode (default) — proxy on :8080, forwarding to localhost:3000
-cargo run -- run
+A practical review of authentication, authorization, validation, logging, secrets, and common API risks.
 
-# Custom port and upstream
-cargo run -- run -p 9090 -u http://127.0.0.1:4000
+### Backend Feature Build
 
-# Central mode (serves rules to nodes via gRPC)
-cargo run -- run -m central
+One well-defined backend feature such as user roles, webhook handling, rate limiting, reporting, or an integration.
 
-# Node mode (syncs rules from a central server)
-cargo run -- run -m node --central http://central-host:8081
-```
+### Debug and Stabilize
 
-## CLI Commands
+Fix a broken feature, clean up a messy codebase, document setup, and make the project easier to continue.
 
-| Command | Description |
-|---|---|
-| `run` | Start the proxy server |
-| `test -f config.toml` | Validate a config file without starting the server |
-| `inspect -f gatekeeper.log` | Query the audit log (filter with `--decision` or `--ip`) |
-| `replay -f requests.json` | Replay recorded requests against the current policy engine |
-| `hash-password -p "secret"` | Generate an Argon2 hash for use in `[[users]]` config |
+### Custom Automation Tool
 
-## Configuration Reference
+A script, CLI, or small internal app that saves time on a repeated business process.
 
-### Rules
+## Working With Me
 
-```toml
-[[rules]]
-name = "rule_name"        # Unique identifier
-path_contains = "/api"    # Optional: match request path
-method = "POST"           # Optional: match HTTP method
-user_agent_contains = ["bot"]  # Optional: match User-Agent substrings
-action = "block"          # "block", "throttle", or "allow"
-priority = 100            # Higher priority rules win
-```
+To get the best estimate, send:
 
-### Users
+- A short description of the project or problem.
+- The goal you want to achieve.
+- Any existing links, screenshots, repositories, or notes.
+- Your preferred deadline.
+- Your budget range, if known.
+- Whether you need a quick MVP, a production-ready build, or help improving existing software.
 
-```toml
-[[users]]
-username = "admin"
-password_hash = "$argon2id$v=19$m=19456,t=2,p=1$..."
-role = "admin"   # "admin", "operator", or "viewer"
-```
+I will respond with a practical plan, recommended scope, timeline, and any important tradeoffs.
 
-Generate hashes with: `cargo run -- hash-password -p "yourpassword"`
+## About This Repository
 
-### WASM Rules
+This repository can be used as a technical sample for clients who want to review my engineering style. It demonstrates:
 
-```toml
-[[wasm_rules]]
-name = "custom_check"
-path = "rules/custom.wasm"
-priority = 200
-```
+- Clear documentation.
+- Secure defaults.
+- Operational tooling.
+- Thoughtful architecture.
+- Practical tradeoffs.
+- Maintainable implementation patterns.
 
-### Threat Feeds
-
-```toml
-[[threat_feeds]]
-name = "abuse_ips"
-url = "https://example.com/blocklist.txt"
-refresh_secs = 3600
-feed_type = "ip"
-```
-
-## Architecture
-
-```
-Client
-  │
-  ▼
-┌──────────────────────────────────┐
-│           Gatekeeper             │
-│                                  │
-│  1. Threat feed check            │
-│  2. WASM rule evaluation         │
-│  3. Policy engine (TOML rules)   │
-│  4. Rate limiter (fallback)      │
-│                                  │
-│  ──► Allow  → forward to upstream│
-│  ──► Block  → 403 Forbidden      │
-│  ──► Throttle → delay + forward  │
-│                                  │
-│  Audit log ──► JSON log file     │
-│  Metrics  ──► /metrics (Prom)    │
-└──────────────────────────────────┘
-  │
-  ▼
-Upstream Service
-```
-
-### Roles & Permissions
-
-| Permission | Admin | Operator | Viewer |
-|---|:---:|:---:|:---:|
-| View stats & rules | ✓ | ✓ | ✓ |
-| Manage rules | ✓ | ✓ | — |
-| Reload config | ✓ | ✓ | — |
-| Manage users | ✓ | — | — |
-
-## Admin API
-
-All admin endpoints are under `/admin/api/` and require a valid JWT (obtained via login).
-
-| Endpoint | Method | Auth | Description |
-|---|---|---|---|
-| `/admin/api/login` | POST | None | Authenticate and receive a JWT |
-| `/admin/api/stats` | GET | Admin | Prometheus metrics snapshot |
-| `/admin/api/rules` | GET | Admin | Current active rules |
-| `/admin/api/rules/validate` | POST | Admin | Dry-run validation of a rule set |
-| `/admin/api/reload` | POST | Admin | Hot-reload config from disk |
-| `/admin/api/users` | GET | Admin | List users |
-| `/admin/api/users` | POST | Admin | Create a user |
-| `/admin/api/users/:username` | DELETE | Admin | Remove a user |
-| `/metrics` | GET | Auth | Prometheus metrics endpoint |
-
-## Security Notes
-
-- **Source IP trust.** `trust_proxy_headers` defaults to `false`, so the TCP
-  peer address is used for rate limiting and IP blocklists. Only enable it
-  when Gatekeeper sits behind a proxy that strips/rewrites
-  `X-Forwarded-For` / `X-Real-IP`.
-- **Multi-node.** The central/node gRPC channel is authenticated with
-  `GATEKEEPER_CLUSTER_TOKEN`. Run it over a trusted network or a TLS-terminating
-  tunnel; the central server binds loopback unless `GATEKEEPER_GRPC_ADDR` is set.
-- **WASM rules.** Modules run with a fuel limit and bounded I/O, but only load
-  modules you trust.
-- **Fail-closed.** Unknown rule actions are treated as `block`.
-- **Upstream forwarding.** Hop-by-hop headers (and any listed in `Connection`)
-  are stripped, `Host` is rewritten to the upstream authority, and
-  `X-Forwarded-For/Host/Proto` are set. HTTPS upstreams use system root certs.
+The source code remains proprietary unless a separate written agreement says otherwise.
 
 ## License
 
 Copyright (c) 2026. All rights reserved.
 
-This software is proprietary and provided under a commercial license. No part
-of it may be copied, modified, distributed, or used except as expressly
-permitted by a written agreement with the copyright holder. Replace this notice
-with your end-user license agreement before distribution.
+This software is proprietary and provided under a commercial license. No part of it may be copied, modified, distributed, or used except as expressly permitted by a written agreement with the copyright holder.
