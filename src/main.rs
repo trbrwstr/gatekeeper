@@ -35,13 +35,14 @@ mod threat;
 
 use clap::Parser;
 use cli::{Cli, Commands};
+use std::process::ExitCode;
 
 use crate::config::load_config;
 use crate::policy::engine::PolicyEngine;
 use crate::policy::replay;
 
 #[tokio::main]
-async fn main() {
+async fn main() -> ExitCode {
     dotenvy::dotenv().ok();
     tracing_subscriber::fmt::init();
 
@@ -80,7 +81,9 @@ async fn main() {
             decision,
             ip,
         } => {
-            log::inspect::inspect(&file, decision, ip);
+            if log::inspect::inspect(&file, decision, ip).is_err() {
+                return ExitCode::FAILURE;
+            }
         }
 
         Commands::Replay { file } => {
@@ -99,4 +102,6 @@ async fn main() {
             }
         }
     }
+
+    ExitCode::SUCCESS
 }
