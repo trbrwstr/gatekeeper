@@ -22,7 +22,30 @@ pub async fn handler(
 ) -> Response<Body> {
     let start = std::time::Instant::now();
 
-    let ctx = RequestContext::from(&req);
+    if let Some(len) = req
+        .headers()
+        .get(axum::http::header::CONTENT_LENGTH)
+        .and_then(|v| v.to_str().ok())
+        .and_then(|v| v.parse::<usize>().ok())
+    {
+        if len > state.max_body_bytes {
+            return Response::builder()
+                .status(StatusCode::PAYLOAD_TOO_LARGE)
+                .body(Body::from("Request body too large"))
+                .unwrap();
+        }
+    }
+
+    // Also cap streamed bodies that omit (or understate) Content-Length so a
+    // chunked upload cannot exhaust memory; exceeding the cap aborts the
+    // forwarded request rather than buffering it.
+    let (parts, body) = req.into_parts();
+    let req = Request::from_parts(
+        parts,
+        Body::new(http_body_util::Limited::new(body, state.max_body_bytes)),
+    );
+
+    let ctx = RequestContext::from(&req, state.trust_proxy_headers);
 
     // 1. Check threat feeds
     let threat_block = {
@@ -32,7 +55,7 @@ pub async fn handler(
                 reason: "threat feed: blocked IP".into(),
                 source: DecisionSource::ThreatFeed,
             })
-        } else if ctx.user_agent.as_ref().map_or(false, |ua| threat_data.is_ua_blocked(ua)) {
+        } else if ctx.user_agent.as_ref().is_some_and(|ua| threat_data.is_ua_blocked(ua)) {
             Some(Decision::Block {
                 reason: "threat feed: blocked user agent".into(),
                 source: DecisionSource::ThreatFeed,
@@ -88,17 +111,18 @@ pub async fn handler(
     metrics::record_request(decision_str, source_str, duration_ms);
     audit::log(&state.log_tx, &ctx, &decision, latency).await;
 
-    enforce(decision, req, &upstream).await
+    enforce(decision, req, &upstream, &ctx.ip).await
 }
 
 async fn enforce(
     decision: Decision,
     req: Request<Body>,
     upstream: &str,
+    client_ip: &str,
 ) -> Response<Body> {
     match decision {
         Decision::Allow { .. } => {
-            match forward::forward(req, upstream).await {
+            match forward::forward(req, upstream, client_ip).await {
                 Ok(res) => res,
                 Err(_) => Response::builder()
                     .status(StatusCode::BAD_GATEWAY)
@@ -115,7 +139,7 @@ async fn enforce(
         Decision::Throttle { .. } => {
             tokio::time::sleep(std::time::Duration::from_millis(200)).await;
 
-            match forward::forward(req, upstream).await {
+            match forward::forward(req, upstream, client_ip).await {
                 Ok(res) => res,
                 Err(_) => Response::builder()
                     .status(StatusCode::BAD_GATEWAY)

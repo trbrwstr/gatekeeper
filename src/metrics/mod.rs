@@ -1,11 +1,10 @@
-pub mod middleware;
-
 use once_cell::sync::Lazy;
 use opentelemetry::metrics::{Counter, Histogram, Meter, MeterProvider as _};
 use opentelemetry::KeyValue;
 use opentelemetry_prometheus::exporter;
 use opentelemetry_sdk::metrics::MeterProvider;
 use prometheus::Registry;
+use std::fmt;
 
 pub static REGISTRY: Lazy<Registry> = Lazy::new(Registry::new);
 
@@ -136,8 +135,35 @@ pub fn snapshot() -> MetricsSnapshot {
 
 pub fn metrics_endpoint() -> Result<String, String> {
     use prometheus::Encoder;
+#[derive(Debug)]
+pub enum MetricsError {
+    Encode(prometheus::Error),
+    Utf8(std::string::FromUtf8Error),
+}
 
-    let encoder = prometheus::TextEncoder::new();
+impl fmt::Display for MetricsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            MetricsError::Encode(e) => write!(f, "metrics encode failed: {}", e),
+            MetricsError::Utf8(e) => write!(f, "metrics utf8 conversion failed: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for MetricsError {}
+
+trait MetricsEncoder {
+    fn encode_to_buffer(&self, metric_families: &[prometheus::proto::MetricFamily], buffer: &mut Vec<u8>) -> Result<(), prometheus::Error>;
+}
+
+impl MetricsEncoder for prometheus::TextEncoder {
+    fn encode_to_buffer(&self, metric_families: &[prometheus::proto::MetricFamily], buffer: &mut Vec<u8>) -> Result<(), prometheus::Error> {
+        use prometheus::Encoder;
+        self.encode(metric_families, buffer)
+    }
+}
+
+fn metrics_endpoint_with_encoder<E: MetricsEncoder>(encoder: &E) -> Result<String, MetricsError> {
     let metric_families = REGISTRY.gather();
     let mut buffer = Vec::new();
     if encoder.encode(&metric_families, &mut buffer).is_err() {
@@ -145,4 +171,32 @@ pub fn metrics_endpoint() -> Result<String, String> {
     }
 
     Ok(String::from_utf8_lossy(&buffer).into_owned())
+    encoder
+        .encode_to_buffer(&metric_families, &mut buffer)
+        .map_err(MetricsError::Encode)?;
+    String::from_utf8(buffer).map_err(MetricsError::Utf8)
+}
+
+pub fn metrics_endpoint() -> Result<String, MetricsError> {
+    let encoder = prometheus::TextEncoder::new();
+    metrics_endpoint_with_encoder(&encoder)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    struct FailingEncoder;
+
+    impl MetricsEncoder for FailingEncoder {
+        fn encode_to_buffer(&self, _: &[prometheus::proto::MetricFamily], _: &mut Vec<u8>) -> Result<(), prometheus::Error> {
+            Err(prometheus::Error::Msg("forced encode failure".to_string()))
+        }
+    }
+
+    #[test]
+    fn metrics_endpoint_returns_error_when_encoder_fails() {
+        let err = metrics_endpoint_with_encoder(&FailingEncoder).expect_err("expected encoder failure");
+        assert!(matches!(err, MetricsError::Encode(_)));
+    }
 }

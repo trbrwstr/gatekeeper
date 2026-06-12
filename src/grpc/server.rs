@@ -22,17 +22,6 @@ impl PolicySyncService {
         }
     }
 
-    pub fn into_service(self) -> PolicySyncServer<Self> {
-        PolicySyncServer::new(self)
-    }
-
-    #[allow(dead_code)]
-    pub async fn update_rules(&self, rules: Vec<Rule>) {
-        let mut current = self.rules.write().await;
-        *current = rules;
-        let mut ver = self.version.write().await;
-        *ver += 1;
-    }
 }
 
 #[tonic::async_trait]
@@ -103,14 +92,37 @@ impl PolicySync for PolicySyncService {
     }
 }
 
+// The auth interceptor closure must return `Result<_, tonic::Status>` per
+// tonic's `Interceptor` trait, so the large-error lint cannot be boxed away.
+#[allow(clippy::result_large_err)]
 pub async fn run_grpc_server(addr: &str, rules: Vec<Rule>) -> Result<(), Box<dyn std::error::Error>> {
+    let expected_token = std::env::var("GATEKEEPER_CLUSTER_TOKEN").map_err(|_| {
+        "GATEKEEPER_CLUSTER_TOKEN must be set in central mode so nodes can authenticate"
+    })?;
+    if expected_token.len() < 16 {
+        return Err("GATEKEEPER_CLUSTER_TOKEN must be at least 16 characters".into());
+    }
+
     let service = PolicySyncService::new(rules);
 
     let addr = addr.parse()?;
     tracing::info!("gRPC policy server listening on {}", addr);
 
+    let auth = move |req: Request<()>| -> Result<Request<()>, Status> {
+        let provided = req
+            .metadata()
+            .get("x-cluster-token")
+            .and_then(|v| v.to_str().ok())
+            .unwrap_or("");
+        if crate::auth::users::constant_time_eq(provided.as_bytes(), expected_token.as_bytes()) {
+            Ok(req)
+        } else {
+            Err(Status::unauthenticated("invalid or missing cluster token"))
+        }
+    };
+
     tonic::transport::Server::builder()
-        .add_service(service.into_service())
+        .add_service(PolicySyncServer::with_interceptor(service, auth))
         .serve(addr)
         .await?;
 

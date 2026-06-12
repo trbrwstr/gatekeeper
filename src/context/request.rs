@@ -9,11 +9,11 @@ pub struct RequestContext {
 }
 
 impl RequestContext {
-    pub fn from<B>(req: &Request<B>) -> Self {
+    pub fn from<B>(req: &Request<B>, trust_proxy_headers: bool) -> Self {
         let headers = req.headers();
 
         Self {
-            ip: extract_ip(req),
+            ip: extract_ip(req, trust_proxy_headers),
             method: req.method().to_string(),
             path: req.uri().path().to_string(),
             user_agent: headers
@@ -24,7 +24,22 @@ impl RequestContext {
     }
 }
 
-fn extract_ip<B>(req: &Request<B>) -> String {
+fn peer_ip<B>(req: &Request<B>) -> String {
+    req.extensions()
+        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
+        .map(|ci| ci.0.ip().to_string())
+        .unwrap_or_else(|| "unknown".to_string())
+}
+
+fn extract_ip<B>(req: &Request<B>, trust_proxy_headers: bool) -> String {
+    // Forwarding headers are attacker-controlled unless a trusted proxy in
+    // front of Gatekeeper overwrites them, so only honor them when explicitly
+    // opted in. Otherwise an attacker could spoof their source IP to evade
+    // per-IP rate limiting and threat-feed IP blocklists.
+    if !trust_proxy_headers {
+        return peer_ip(req);
+    }
+
     if let Some(forwarded) = req.headers().get("x-real-ip") {
         if let Ok(val) = forwarded.to_str() {
             return val.trim().to_string();
@@ -37,8 +52,5 @@ fn extract_ip<B>(req: &Request<B>) -> String {
         }
     }
 
-    req.extensions()
-        .get::<axum::extract::ConnectInfo<std::net::SocketAddr>>()
-        .map(|ci| ci.0.ip().to_string())
-        .unwrap_or_else(|| "unknown".to_string())
+    peer_ip(req)
 }

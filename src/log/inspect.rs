@@ -34,6 +34,10 @@ pub fn inspect(
             Err(err) => {
                 eprintln!("failed to read log line: {}", err);
                 continue;
+            Ok(l) => l,
+            Err(e) => {
+                eprintln!("error reading log file: {}", e);
+                break;
             }
         };
 

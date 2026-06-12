@@ -10,10 +10,10 @@ use std::sync::Arc;
 
 use crate::app_state::AppState;
 use crate::auth::{jwt, users};
-use crate::config::config::load_config;
+use crate::config::load_config;
+use crate::config::reload::apply_config;
 use crate::config::validate::validate_rules;
 use crate::metrics;
-use crate::policy::engine::PolicyEngine;
 use crate::policy::rules::Rule;
 
 pub fn api_router() -> Router<(String, Arc<AppState>)> {
@@ -44,6 +44,10 @@ async fn stats_handler() -> impl IntoResponse {
         .unwrap_or_else(|e| format!("# {}\n", e));
 
     Json(StatsResponse { metrics_text })
+    match metrics::metrics_endpoint() {
+        Ok(metrics_text) => Json(StatsResponse { metrics_text }).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "metrics scrape failed").into_response(),
+    }
 }
 
 async fn rules_handler(
@@ -109,7 +113,11 @@ async fn login_handler(
             Err(_) => return (StatusCode::UNAUTHORIZED, "no users configured and GATEKEEPER_ADMIN_PASS not set").into_response(),
         };
 
-        if payload.username == admin_user && payload.password == admin_pass {
+        let user_ok =
+            users::constant_time_eq(payload.username.as_bytes(), admin_user.as_bytes());
+        let pass_ok =
+            users::constant_time_eq(payload.password.as_bytes(), admin_pass.as_bytes());
+        if user_ok & pass_ok {
             let token = jwt::issue_token(&payload.username, "admin");
             (StatusCode::OK, Json(serde_json::json!({ "token": token }))).into_response()
         } else {
@@ -123,22 +131,15 @@ async fn reload_handler(
 ) -> impl IntoResponse {
     match load_config(&state.config_path) {
         Ok(new_config) => {
-            let new_engine = PolicyEngine::new(new_config.rules);
-            state.policy_engine.store(Arc::new(new_engine));
-            users::reload_users(&state.user_store, &new_config.users).await;
-
-            let new_wasm = new_config.wasm_rules.as_ref().map(|wasm_configs| {
-                crate::wasm::WasmEngine::new(wasm_configs)
-            });
-            *state.wasm_engine.write().await = new_wasm;
-
-            if let Some(ref feeds) = new_config.threat_feeds {
-                let mut data = state.threat_store.write().await;
-                data.blocked_ips.clear();
-                data.blocked_user_agents.clear();
-                drop(data);
-                crate::threat::start_feeds(feeds.clone(), state.threat_store.clone()).await;
-            }
+            apply_config(
+                new_config,
+                &state.policy_engine,
+                &state.user_store,
+                &state.wasm_engine,
+                &state.threat_store,
+                &state.threat_feed_handles,
+            )
+            .await;
 
             (StatusCode::OK, "config reloaded successfully".to_string())
         }

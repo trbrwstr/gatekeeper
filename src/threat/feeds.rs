@@ -2,11 +2,19 @@ use std::time::Duration;
 use tokio::time;
 use tracing::{error, info};
 
-use crate::config::config::ThreatFeedConfig;
+use crate::config::ThreatFeedConfig;
 use super::ThreatStore;
 
 pub async fn run_feed(config: ThreatFeedConfig, store: ThreatStore) {
     let mut interval = time::interval(Duration::from_secs(config.refresh_secs));
+
+    if !(config.url.starts_with("http://") || config.url.starts_with("https://")) {
+        error!(
+            "threat feed '{}' has an unsupported URL scheme, skipping: {}",
+            config.name, config.url
+        );
+        return;
+    }
 
     loop {
         interval.tick().await;

@@ -1,11 +1,13 @@
 use axum::{http::StatusCode, response::IntoResponse, routing::{any, get}};
+use axum::routing::{any, get};
+use axum::{http::StatusCode, response::IntoResponse};
 use std::net::SocketAddr;
 use std::sync::Arc;
 use tokio::sync::{mpsc, Mutex};
 
 use crate::admin;
 use crate::app_state::AppState;
-use crate::config::config::load_config;
+use crate::config::load_config;
 use crate::config::reload::{shared_engine, watch_config};
 use crate::metrics;
 use crate::proxy::handler;
@@ -29,9 +31,13 @@ pub async fn run(port: u16, upstream: String, central: Option<String>, config_pa
     ));
 
     let threat_store = crate::threat::new_threat_store();
-    if let Some(ref feeds) = config.threat_feeds {
-        crate::threat::start_feeds(feeds.clone(), threat_store.clone()).await;
-    }
+    let threat_feed_handles = crate::threat::new_feed_handles();
+    crate::threat::start_feeds(
+        config.threat_feeds.clone().unwrap_or_default(),
+        threat_store.clone(),
+        &threat_feed_handles,
+    )
+    .await;
 
     let user_store = crate::auth::users::init_user_store(&config.users);
 
@@ -41,6 +47,7 @@ pub async fn run(port: u16, upstream: String, central: Option<String>, config_pa
         user_store.clone(),
         wasm_engine.clone(),
         threat_store.clone(),
+        threat_feed_handles.clone(),
     ));
 
     if let Some(central_addr) = central {
@@ -62,7 +69,10 @@ pub async fn run(port: u16, upstream: String, central: Option<String>, config_pa
         config_path,
         wasm_engine,
         threat_store,
+        threat_feed_handles,
         user_store,
+        trust_proxy_headers: config.trust_proxy_headers,
+        max_body_bytes: config.max_body_bytes,
     });
 
     let app = admin::admin_router()
@@ -91,5 +101,27 @@ async fn prometheus_handler() -> impl IntoResponse {
     match metrics::metrics_endpoint() {
         Ok(body) => (StatusCode::OK, body).into_response(),
         Err(err) => (StatusCode::INTERNAL_SERVER_ERROR, format!("# {}\n", err)).into_response(),
+fn metrics_http_response(result: Result<String, metrics::MetricsError>) -> impl IntoResponse {
+    match result {
+        Ok(body) => (StatusCode::OK, body).into_response(),
+        Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "metrics scrape failed").into_response(),
+    }
+}
+
+async fn prometheus_handler() -> impl IntoResponse {
+    metrics_http_response(metrics::metrics_endpoint())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn metrics_response_is_500_when_encoder_fails() {
+        let response = metrics_http_response(Err(metrics::MetricsError::Encode(
+            prometheus::Error::Msg("forced".to_string()),
+        )));
+        let response = response.into_response();
+        assert_eq!(response.status(), StatusCode::INTERNAL_SERVER_ERROR);
     }
 }
