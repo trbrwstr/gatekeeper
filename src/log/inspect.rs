@@ -1,6 +1,6 @@
 use serde::Deserialize;
 use std::fs::File;
-use std::io::{BufRead, BufReader};
+use std::io::{self, BufRead, BufReader};
 
 #[derive(Debug, Deserialize)]
 pub struct AuditEvent {
@@ -18,12 +18,19 @@ pub fn inspect(
     file: &str,
     decision_filter: Option<String>,
     ip_filter: Option<String>,
-) {
-    let file = File::open(file).expect("failed to open log file");
+) -> io::Result<()> {
+    let file = File::open(file).map_err(|err| {
+        eprintln!("failed to open log file: {}", err);
+        err
+    })?;
     let reader = BufReader::new(file);
 
     for line in reader.lines() {
         let line = match line {
+            Ok(line) => line,
+            Err(err) => {
+                eprintln!("failed to read log line: {}", err);
+                continue;
             Ok(l) => l,
             Err(e) => {
                 eprintln!("error reading log file: {}", e);
@@ -63,4 +70,6 @@ pub fn inspect(
             }
         }
     }
+
+    Ok(())
 }

@@ -41,14 +41,14 @@ async fn static_handler(Path(path): Path<String>) -> impl IntoResponse {
     match Assets::get(&path) {
         Some(content) => {
             let mime = mime_guess::from_path(&path).first_or_octet_stream();
-            Response::builder()
+            match Response::builder()
                 .header(header::CONTENT_TYPE, mime.as_ref())
                 .body(axum::body::Body::from(content.data.to_vec()))
-                .unwrap()
+            {
+                Ok(resp) => resp,
+                Err(_) => (StatusCode::INTERNAL_SERVER_ERROR, "response build error").into_response(),
+            }
         }
-        None => Response::builder()
-            .status(StatusCode::NOT_FOUND)
-            .body(axum::body::Body::from("Not found"))
-            .unwrap(),
+        None => (StatusCode::NOT_FOUND, "Not found").into_response(),
     }
 }
